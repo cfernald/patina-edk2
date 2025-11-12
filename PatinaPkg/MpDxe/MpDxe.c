@@ -702,6 +702,14 @@ InitializeMpExceptionStackSwitchHandlers (
   UINTN                           BufferSize;
   EFI_STATUS                      Status;
   UINT8                           *Buffer;
+  UINTN                           BspNumber;
+
+  Status = MpInitLibWhoAmI (&BspNumber);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "[%a] - Failed to get BSP processor number.\n", __func__));
+    ASSERT_EFI_ERROR (Status);
+    return;
+  }
 
   SwitchStackData = AllocateZeroPool (mNumberOfProcessors * sizeof (EXCEPTION_STACK_SWITCH_CONTEXT));
   if (SwitchStackData == NULL) {
@@ -710,20 +718,20 @@ InitializeMpExceptionStackSwitchHandlers (
     return;
   }
 
-  //
-  // Set the BSP status to success so that it will not take any action. This is because the core will maintain
-  // control over the IDT/GDT/Stack for the BSP.
-  //
-
-  SwitchStackData[0].Status = EFI_SUCCESS;
-
-  for (Index = 1; Index < mNumberOfProcessors; ++Index) {
+  for (Index = 0; Index < mNumberOfProcessors; ++Index) {
     //
     // Because the procedure may runs multiple times, use the status EFI_NOT_STARTED
     // to indicate the procedure haven't been run yet.
     //
     SwitchStackData[Index].Status = EFI_NOT_STARTED;
   }
+
+  //
+  // Set the BSP status to success so that it will not take any action. This is because the core will maintain
+  // control over the IDT/GDT/Stack for the BSP.
+  //
+
+  SwitchStackData[BspNumber].Status = EFI_SUCCESS;
 
   Status = MpInitLibStartupAllCPUs (
              InitializeExceptionStackSwitchHandlers,
@@ -733,7 +741,7 @@ InitializeMpExceptionStackSwitchHandlers (
   ASSERT_EFI_ERROR (Status);
 
   BufferSize = 0;
-  for (Index = 1; Index < mNumberOfProcessors; ++Index) {
+  for (Index = 0; Index < mNumberOfProcessors; ++Index) {
     if (SwitchStackData[Index].Status == EFI_BUFFER_TOO_SMALL) {
       ASSERT (SwitchStackData[Index].BufferSize != 0);
       BufferSize += SwitchStackData[Index].BufferSize;
@@ -763,7 +771,7 @@ InitializeMpExceptionStackSwitchHandlers (
     ZeroMem (Buffer, BufferSize);
 
     BufferSize = 0;
-    for (Index = 1; Index < mNumberOfProcessors; ++Index) {
+    for (Index = 0; Index < mNumberOfProcessors; ++Index) {
       if (SwitchStackData[Index].Status == EFI_BUFFER_TOO_SMALL) {
         SwitchStackData[Index].Buffer = (VOID *)(&Buffer[BufferSize]);
         BufferSize                   += SwitchStackData[Index].BufferSize;
